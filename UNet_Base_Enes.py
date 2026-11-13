@@ -6,7 +6,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-
 def initialize_weights(*models):
     for model in models:
         for module in model.modules():

@@ -16,8 +16,15 @@ from PIL import Image
 #from medpy.metric.binary import dc, hd, asd, assd
 import scipy.spatial
 
-# from scipy.spatial.distance import directed_hausdorff
+from scipy.ndimage import binary_erosion
+from scipy.spatial.distance import directed_hausdorff
 
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+
+from matplotlib.patches import Patch
+
+CLASS_CMAP = ListedColormap(['black', 'tab:red', 'tab:green', 'tab:blue'])   # fond, VD, Myo, VG
 
 labels = {0: 'Background', 1: 'RV', 2: 'Myo', 3: 'LV'}
 '''
@@ -45,6 +52,25 @@ def dice_per_class(pred, target, num_classes=4):
         total = p.sum().item() + t.sum().item()
         dices.append(1.0 if total == 0 else 2 * inter / total)
     return dices
+def hausdorff_per_class(pred, target, num_classes=4):
+    """Distance de Hausdorff (en pixels) de chaque classe sauf le fond : [VD, Myo, VG].
+    Moyenne sur les images où la classe est présente dans la prédiction ET le masque."""
+    pred, target = pred.numpy(), target.numpy()
+    result = []
+    for c in range(1, num_classes):
+        distances = []
+        for p_img, t_img in zip(pred, target):
+            p = (p_img == c)
+            t = (t_img == c)
+            if not p.any() or not t.any():
+                continue
+            p_border = np.argwhere(p & ~binary_erosion(p))
+            t_border = np.argwhere(t & ~binary_erosion(t))
+            d = max(directed_hausdorff(p_border, t_border)[0],
+                    directed_hausdorff(t_border, p_border)[0])
+            distances.append(d)
+        result.append(np.mean(distances) if distances else float('nan'))
+    return result
 
 def getImageImageList(imagesFolder):
     if os.path.exists(imagesFolder):
@@ -141,5 +167,45 @@ def validate(net, loader, loss_fn):
         losses.append(loss_fn(out, target).item())
         preds.append(out.argmax(dim=1).cpu())      # classe la plus probable de chaque pixel
         targets.append(target.cpu())
-    dsc = dice_per_class(torch.cat(preds), torch.cat(targets))
-    return np.mean(losses), dsc
+    preds, targets = torch.cat(preds), torch.cat(targets)
+    dsc = dice_per_class(preds, targets)
+    hd = hausdorff_per_class(preds, targets)
+    return np.mean(losses), dsc, hd
+def fmt(x):
+    """Affiche une mesure : « — » si elle n'existe pas, 2 décimales pour un Dice, entier pour une distance."""
+    return '—' if np.isnan(x) else '{:.2f}'.format(x) if x < 1.5 else '{:.0f}'.format(x)
+
+
+@torch.no_grad()
+def show_predictions(net, loader, n=4, title=''):
+    """Affiche n images : IRM, vrai masque, prédiction (avec Dice et Hausdorff de l'image), probabilité du fond."""
+    net.eval()
+    images, labels, _ = next(iter(loader))
+    images, labels = images[:n], labels[:n]
+    probs = torch.softmax(net(to_var(images)), dim=1).cpu()
+    pred = probs.argmax(dim=1)
+    target = getTargetSegmentation(labels).view(-1, 256, 256)
+    fig, axes = plt.subplots(n, 4, figsize=(13, 3.4 * n))
+    for k in range(n):
+        p, t = pred[k:k + 1], target[k:k + 1]                      # une seule image
+        # Classe absente du masque ET de la prédiction : pas de Dice à afficher
+        present = [(t == c).any().item() or (p == c).any().item() for c in (1, 2, 3)]
+        dsc = [d if ok else float('nan') for d, ok in zip(dice_per_class(p, t), present)]
+        hd = hausdorff_per_class(p, t)
+        axes[k, 0].imshow(images[k, 0], cmap='gray')
+        axes[k, 1].imshow(target[k], cmap=CLASS_CMAP, vmin=0, vmax=3, interpolation='nearest')
+        axes[k, 2].imshow(pred[k], cmap=CLASS_CMAP, vmin=0, vmax=3, interpolation='nearest')
+        axes[k, 2].set_xlabel('Dice  VD {}  Myo {}  VG {}\nHD    VD {}  Myo {}  VG {}'.format(
+            *map(fmt, dsc), *map(fmt, hd)), fontsize=9, family='monospace')
+        im = axes[k, 3].imshow(probs[k, 0], cmap='magma', vmin=0, vmax=1)
+        for a in axes[k]:
+            a.set_xticks([])
+            a.set_yticks([])
+    for a, t in zip(axes[0], ['Image', 'Vrai masque', 'Prédiction', 'Probabilité « fond »']):
+        a.set_title(t)
+    fig.colorbar(im, ax=axes[:, 3], shrink=0.6)
+    fig.legend(handles=[Patch(color=CLASS_CMAP(c), label=l) for c, l in
+                        [(0, 'Fond'), (1, 'VD'), (2, 'Myocarde'), (3, 'VG')]],
+               loc='upper center', ncol=4, frameon=False, bbox_to_anchor=(0.45, 0.965))
+    fig.suptitle(title, y=0.995)
+    plt.show()
