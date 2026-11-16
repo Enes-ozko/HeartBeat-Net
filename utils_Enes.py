@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
-from scipy.ndimage import binary_erosion
+from scipy.ndimage import binary_erosion, label
 from scipy.spatial.distance import directed_hausdorff
 
 # Couleurs des classes : fond, VD, myocarde, VG
@@ -66,10 +66,27 @@ def hausdorff_per_class(pred, target):
     return result
 
 
+def keep_largest_component(pred):
+    """Post-traitement : pour chaque image et chaque classe du cœur, on garde la plus grosse tache
+    et les autres deviennent du fond (un cœur n'a qu'un VD, un myocarde et un VG).
+    pred contient les classes 0..3, forme [images, 256, 256]."""
+    pred = pred.clone()
+    for k in range(len(pred)):
+        for c in [1, 2, 3]:
+            zones, n = label((pred[k] == c).numpy())   # numérote les taches : 1, 2, ..., n
+            if n > 1:
+                sizes = [(zones == i).sum() for i in range(1, n + 1)]
+                biggest = np.argmax(sizes) + 1
+                small = (zones > 0) & (zones != biggest)
+                pred[k][torch.from_numpy(small)] = 0
+    return pred
+
+
 @torch.no_grad()
-def validate(net, loader, loss_fn, with_hausdorff=True):
+def validate(net, loader, loss_fn, with_hausdorff=True, post_process=False):
     """Évalue le réseau sur un loader. Renvoie la loss moyenne, le Dice [VD, Myo, VG]
-    et la distance de Hausdorff [VD, Myo, VG] (None si with_hausdorff=False)."""
+    et la distance de Hausdorff [VD, Myo, VG] (None si with_hausdorff=False).
+    post_process=True : mesures faites après keep_largest_component."""
     net.eval()
     losses, preds, targets = [], [], []
     for images, labels, _ in loader:
@@ -81,6 +98,8 @@ def validate(net, loader, loss_fn, with_hausdorff=True):
         targets.append(target.cpu())
     preds = torch.cat(preds)
     targets = torch.cat(targets)
+    if post_process:
+        preds = keep_largest_component(preds)
     dsc = dice_per_class(preds, targets)
     hd = hausdorff_per_class(preds, targets) if with_hausdorff else None
     return np.mean(losses), dsc, hd
@@ -96,13 +115,15 @@ def format_score(x):
 
 
 @torch.no_grad()
-def show_predictions(net, loader, n=4, title=''):
+def show_predictions(net, loader, n=4, title='', post_process=False):
     """Affiche n images : IRM, vrai masque, prédiction (avec son Dice et son Hausdorff), probabilité du fond."""
     net.eval()
     images, labels, _ = next(iter(loader))
     images, labels = images[:n], labels[:n]
     probs = torch.softmax(net(to_var(images)), dim=1).cpu()
     pred = probs.argmax(dim=1)
+    if post_process:
+        pred = keep_largest_component(pred)
     target = getTargetSegmentation(labels)
 
     fig, axes = plt.subplots(n, 4, figsize=(13, 3.4 * n))
@@ -170,7 +191,7 @@ class DiceLoss(nn.Module):
 
 
 @torch.no_grad()
-def show_confusion(net, loader, title='', min_pixels=50):
+def show_confusion(net, loader, title='', min_pixels=50, post_process=False):
     """Matrice de confusion par pixel (4 x 4, normalisée par ligne) et détection du cœur par image.
     Une image compte comme « cœur prédit » à partir de min_pixels pixels de cœur (un point isolé ne compte pas)."""
     net.eval()
@@ -180,6 +201,8 @@ def show_confusion(net, loader, title='', min_pixels=50):
 
     for images, labels, _ in loader:
         pred = net(to_var(images)).argmax(dim=1).cpu()
+        if post_process:
+            pred = keep_largest_component(pred)
         target = getTargetSegmentation(labels)
         # Par pixel : on compte chaque couple (vraie classe, classe prédite)
         for t in range(4):
