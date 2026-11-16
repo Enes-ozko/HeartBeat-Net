@@ -133,3 +133,22 @@ def show_predictions(net, loader, n=4, title=''):
     fig.legend(handles=legend, loc='upper center', ncol=4, frameon=False, bbox_to_anchor=(0.45, 0.965))
     fig.suptitle(title, y=0.995)
     plt.show()
+
+
+def show_augmentations(dataset, index=0, n=5):
+    """Ce que le réseau voit pendant l'entraînement : la même image tirée n fois avec l'augmentation.
+    En haut l'image, en bas son masque, qui a subi exactement la même transformation."""
+    fig, axes = plt.subplots(2, n, figsize=(3 * n, 6.5))
+    for k in range(n):
+        img, mask, _ = dataset[index]   # chaque appel tire une nouvelle transformation au hasard
+        target = getTargetSegmentation(mask.unsqueeze(0))[0]
+        axes[0, k].imshow(img[0], cmap='gray', vmin=0, vmax=1)
+        axes[1, k].imshow(target, cmap=CLASS_CMAP, vmin=0, vmax=3, interpolation='nearest')
+        axes[0, k].set_title('Tirage {}'.format(k + 1))
+        for ax in axes[:, k]:
+            ax.set_xticks([])
+            ax.set_yticks([])
+    axes[0, 0].set_ylabel('Image')
+    axes[1, 0].set_ylabel('Masque')
+    fig.suptitle('Augmentation de données : une même image, {} tirages'.format(n))
+    plt.show()
