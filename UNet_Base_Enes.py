@@ -1,10 +1,7 @@
-import torch.nn.init as init
-import torch.nn.functional as F
-import math
-
 import torch
 import torch.nn.functional as F
 from torch import nn
+
 
 def initialize_weights(*models):
     for model in models:
@@ -19,8 +16,10 @@ def initialize_weights(*models):
 
 
 class _EncoderBlock(nn.Module):
+    """Convolution 3x3 (padding 1 : la taille est gardée) + BatchNorm + ReLU, puis MaxPool (taille / 2)."""
+
     def __init__(self, in_channels, out_channels, dropout=False):
-        super(_EncoderBlock, self).__init__()
+        super().__init__()
         layers = [
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
@@ -36,8 +35,10 @@ class _EncoderBlock(nn.Module):
 
 
 class _DecoderBlock(nn.Module):
+    """Convolution 3x3 + BatchNorm + ReLU, puis convolution transposée (taille x 2)."""
+
     def __init__(self, in_channels, middle_channels, out_channels):
-        super(_DecoderBlock, self).__init__()
+        super().__init__()
         self.decode = nn.Sequential(
             nn.Conv2d(in_channels, middle_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(middle_channels),
@@ -50,8 +51,10 @@ class _DecoderBlock(nn.Module):
 
 
 class UNet(nn.Module):
+    """UNet du prof avec 8 fois plus de filtres (32 à 512) et du padding dans les convolutions."""
+
     def __init__(self, num_classes):
-        super(UNet, self).__init__()
+        super().__init__()
         self.enc1 = _EncoderBlock(1, 32)
         self.enc2 = _EncoderBlock(32, 64)
         self.enc3 = _EncoderBlock(64, 128)
@@ -77,10 +80,10 @@ class UNet(nn.Module):
         enc3 = self.enc3(enc2)
         enc4 = self.enc4(enc3)
         center = self.center(enc4)
+        # Raccourcis du U : chaque sortie de l'encodeur est agrandie puis collée au décodeur
         dec4 = self.dec4(torch.cat([center, F.interpolate(enc4, center.size()[2:], mode='bilinear')], 1))
         dec3 = self.dec3(torch.cat([dec4, F.interpolate(enc3, dec4.size()[2:], mode='bilinear')], 1))
         dec2 = self.dec2(torch.cat([dec3, F.interpolate(enc2, dec3.size()[2:], mode='bilinear')], 1))
         dec1 = self.dec1(torch.cat([dec2, F.interpolate(enc1, dec2.size()[2:], mode='bilinear')], 1))
         final = self.final(dec1)
-
         return F.interpolate(final, x.size()[2:], mode='bilinear')
