@@ -8,26 +8,21 @@ from matplotlib.patches import Patch
 from scipy.ndimage import binary_erosion, label
 from scipy.spatial.distance import directed_hausdorff
 
-# Couleurs des classes : fond, VD, myocarde, VG
 CLASS_CMAP = ListedColormap(['black', 'tab:red', 'tab:green', 'tab:blue'])
 
 
 def to_var(x):
-    """Envoie un tenseur sur le GPU s'il y en a un."""
     if torch.cuda.is_available():
         x = x.cuda()
     return x
 
 
 def getTargetSegmentation(batch):
-    """Masque (valeurs 0, 85, 170, 255 -> 0, 1/3, 2/3, 1 après ToTensor) -> classes 0, 1, 2, 3."""
     denom = 0.33333334
     return (batch / denom).round().long().squeeze(1)
 
 
 def dice_per_class(pred, target):
-    """Dice de chaque classe sauf le fond : [VD, Myo, VG].
-    pred et target contiennent les classes 0..3, forme [images, 256, 256]."""
     dices = []
     for c in [1, 2, 3]:
         p = (pred == c)
@@ -35,15 +30,13 @@ def dice_per_class(pred, target):
         inter = (p & t).sum().item()
         total = p.sum().item() + t.sum().item()
         if total == 0:
-            dices.append(1.0)   # classe absente des deux côtés : rien à rater
+            dices.append(1.0)
         else:
             dices.append(2 * inter / total)
     return dices
 
 
 def hausdorff_per_class(pred, target):
-    """Distance de Hausdorff en pixels de chaque classe sauf le fond : [VD, Myo, VG].
-    Moyenne sur les images où la classe est dans la prédiction ET dans le masque, sinon nan."""
     pred, target = pred.numpy(), target.numpy()
     result = []
     for c in [1, 2, 3]:
@@ -53,7 +46,6 @@ def hausdorff_per_class(pred, target):
             t = (t_img == c)
             if not p.any() or not t.any():
                 continue
-            # Contour = la zone moins la zone rognée d'un pixel
             p_border = np.argwhere(p & ~binary_erosion(p))
             t_border = np.argwhere(t & ~binary_erosion(t))
             d1 = directed_hausdorff(p_border, t_border)[0]
@@ -67,13 +59,10 @@ def hausdorff_per_class(pred, target):
 
 
 def keep_largest_component(pred):
-    """Post-traitement : pour chaque image et chaque classe du cœur, on garde la plus grosse tache
-    et les autres deviennent du fond (un cœur n'a qu'un VD, un myocarde et un VG).
-    pred contient les classes 0..3, forme [images, 256, 256]."""
     pred = pred.clone()
     for k in range(len(pred)):
         for c in [1, 2, 3]:
-            zones, n = label((pred[k] == c).numpy())   # numérote les taches : 1, 2, ..., n
+            zones, n = label((pred[k] == c).numpy())
             if n > 1:
                 sizes = [(zones == i).sum() for i in range(1, n + 1)]
                 biggest = np.argmax(sizes) + 1
@@ -84,9 +73,6 @@ def keep_largest_component(pred):
 
 @torch.no_grad()
 def validate(net, loader, loss_fn, with_hausdorff=True, post_process=False):
-    """Évalue le réseau sur un loader. Renvoie la loss moyenne, le Dice [VD, Myo, VG]
-    et la distance de Hausdorff [VD, Myo, VG] (None si with_hausdorff=False).
-    post_process=True : mesures faites après keep_largest_component."""
     net.eval()
     losses, preds, targets = [], [], []
     for images, labels, _ in loader:
@@ -106,9 +92,8 @@ def validate(net, loader, loss_fn, with_hausdorff=True, post_process=False):
 
 
 def format_score(x):
-    """Texte d'une mesure : « — » si elle n'existe pas, 2 décimales pour un Dice, entier pour une distance."""
     if np.isnan(x):
-        return '—'
+        return '-'
     if x <= 1:
         return '{:.2f}'.format(x)
     return '{:.0f}'.format(x)
@@ -116,7 +101,6 @@ def format_score(x):
 
 @torch.no_grad()
 def show_predictions(net, loader, n=4, title='', post_process=False):
-    """Affiche n images : IRM, vrai masque, prédiction (avec son Dice et son Hausdorff), probabilité du fond."""
     net.eval()
     images, labels, _ = next(iter(loader))
     images, labels = images[:n], labels[:n]
@@ -132,7 +116,6 @@ def show_predictions(net, loader, n=4, title='', post_process=False):
         t = target[k:k + 1]
         dsc = dice_per_class(p, t)
         hd = hausdorff_per_class(p, t)
-        # Classe ni dans le masque ni dans la prédiction : on affiche « — » au lieu d'un Dice de 1
         for i, c in enumerate([1, 2, 3]):
             if not (p == c).any() and not (t == c).any():
                 dsc[i] = float('nan')
@@ -148,7 +131,7 @@ def show_predictions(net, loader, n=4, title='', post_process=False):
             ax.set_xticks([])
             ax.set_yticks([])
 
-    for ax, name in zip(axes[0], ['Image', 'Vrai masque', 'Prédiction', 'Probabilité « fond »']):
+    for ax, name in zip(axes[0], ['Image', 'Vrai masque', 'Prédiction', 'Probabilité du fond']):
         ax.set_title(name)
     fig.colorbar(im, ax=axes[:, 3], shrink=0.6)
     legend = [Patch(color=CLASS_CMAP(0), label='Fond'), Patch(color=CLASS_CMAP(1), label='VD'),
@@ -159,11 +142,9 @@ def show_predictions(net, loader, n=4, title='', post_process=False):
 
 
 def show_augmentations(dataset, index=0, n=5):
-    """Ce que le réseau voit pendant l'entraînement : la même image tirée n fois avec l'augmentation.
-    En haut l'image, en bas son masque, qui a subi exactement la même transformation."""
     fig, axes = plt.subplots(2, n, figsize=(3 * n, 6.5))
     for k in range(n):
-        img, mask, _ = dataset[index]   # chaque appel tire une nouvelle transformation au hasard
+        img, mask, _ = dataset[index]
         target = getTargetSegmentation(mask.unsqueeze(0))[0]
         axes[0, k].imshow(img[0], cmap='gray', vmin=0, vmax=1)
         axes[1, k].imshow(target, cmap=CLASS_CMAP, vmin=0, vmax=3, interpolation='nearest')
@@ -178,22 +159,17 @@ def show_augmentations(dataset, index=0, n=5):
 
 
 class DiceLoss(nn.Module):
-    """Loss Dice « douce » : 1 - Dice calculé sur les probabilités (softmax), moyenne sur VD, Myo et VG.
-    Contrairement à l'entropie croisée, chaque structure compte autant, quelle que soit sa taille."""
-
     def forward(self, logits, target):
-        probs = torch.softmax(logits, dim=1)                          # [B, 4, H, W]
-        one_hot = F.one_hot(target, 4).permute(0, 3, 1, 2).float()    # [B, H, W] -> [B, 4, H, W]
-        inter = (probs * one_hot).sum(dim=(0, 2, 3))                  # une valeur par classe
+        probs = torch.softmax(logits, dim=1)
+        one_hot = F.one_hot(target, 4).permute(0, 3, 1, 2).float()
+        inter = (probs * one_hot).sum(dim=(0, 2, 3))
         total = probs.sum(dim=(0, 2, 3)) + one_hot.sum(dim=(0, 2, 3))
         dice = (2 * inter + 1e-6) / (total + 1e-6)
-        return 1 - dice[1:].mean()                                    # on ignore le fond
+        return 1 - dice[1:].mean()
 
 
 @torch.no_grad()
 def show_confusion(net, loader, title='', min_pixels=50, post_process=False):
-    """Matrice de confusion par pixel (4 x 4, normalisée par ligne) et détection du cœur par image.
-    Une image compte comme « cœur prédit » à partir de min_pixels pixels de cœur (un point isolé ne compte pas)."""
     net.eval()
     names = ['Fond', 'VD', 'Myo', 'VG']
     matrix = np.zeros((4, 4))
@@ -204,11 +180,9 @@ def show_confusion(net, loader, title='', min_pixels=50, post_process=False):
         if post_process:
             pred = keep_largest_component(pred)
         target = getTargetSegmentation(labels)
-        # Par pixel : on compte chaque couple (vraie classe, classe prédite)
         for t in range(4):
             for p in range(4):
                 matrix[t, p] += ((target == t) & (pred == p)).sum().item()
-        # Par image : y a-t-il du cœur dans le vrai masque ? Et dans la prédiction ?
         for k in range(len(target)):
             heart_true = (target[k] > 0).any().item()
             heart_pred = (pred[k] > 0).sum().item() >= min_pixels
@@ -221,7 +195,7 @@ def show_confusion(net, loader, title='', min_pixels=50, post_process=False):
             else:
                 empty_ok += 1
 
-    matrix = matrix / matrix.sum(axis=1, keepdims=True)   # chaque ligne en pourcentage
+    matrix = matrix / matrix.sum(axis=1, keepdims=True)
     fig, ax = plt.subplots(figsize=(5, 4.5))
     ax.imshow(matrix, cmap='Blues', vmin=0, vmax=1)
     for t in range(4):

@@ -16,8 +16,6 @@ def initialize_weights(*models):
 
 
 class _EncoderBlock(nn.Module):
-    """Convolution 3x3 (padding 1 : la taille est gardée) + BatchNorm + ReLU, puis MaxPool (taille / 2)."""
-
     def __init__(self, in_channels, out_channels, dropout=False):
         super().__init__()
         layers = [
@@ -35,8 +33,6 @@ class _EncoderBlock(nn.Module):
 
 
 class _DecoderBlock(nn.Module):
-    """Convolution 3x3 + BatchNorm + ReLU, puis convolution transposée (taille x 2)."""
-
     def __init__(self, in_channels, middle_channels, out_channels):
         super().__init__()
         self.decode = nn.Sequential(
@@ -51,8 +47,6 @@ class _DecoderBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    """UNet du prof avec 8 fois plus de filtres (32 à 512) et du padding dans les convolutions."""
-
     def __init__(self, num_classes):
         super().__init__()
         self.enc1 = _EncoderBlock(1, 32)
@@ -80,7 +74,6 @@ class UNet(nn.Module):
         enc3 = self.enc3(enc2)
         enc4 = self.enc4(enc3)
         center = self.center(enc4)
-        # Raccourcis du U : chaque sortie de l'encodeur est agrandie puis collée au décodeur
         dec4 = self.dec4(torch.cat([center, F.interpolate(enc4, center.size()[2:], mode='bilinear')], 1))
         dec3 = self.dec3(torch.cat([dec4, F.interpolate(enc3, dec4.size()[2:], mode='bilinear')], 1))
         dec2 = self.dec2(torch.cat([dec3, F.interpolate(enc2, dec3.size()[2:], mode='bilinear')], 1))
