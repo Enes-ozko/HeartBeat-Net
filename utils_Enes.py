@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
@@ -152,3 +154,68 @@ def show_augmentations(dataset, index=0, n=5):
     axes[1, 0].set_ylabel('Masque')
     fig.suptitle('Augmentation de données : une même image, {} tirages'.format(n))
     plt.show()
+
+
+class DiceLoss(nn.Module):
+    """Loss Dice « douce » : 1 - Dice calculé sur les probabilités (softmax), moyenne sur VD, Myo et VG.
+    Contrairement à l'entropie croisée, chaque structure compte autant, quelle que soit sa taille."""
+
+    def forward(self, logits, target):
+        probs = torch.softmax(logits, dim=1)                          # [B, 4, H, W]
+        one_hot = F.one_hot(target, 4).permute(0, 3, 1, 2).float()    # [B, H, W] -> [B, 4, H, W]
+        inter = (probs * one_hot).sum(dim=(0, 2, 3))                  # une valeur par classe
+        total = probs.sum(dim=(0, 2, 3)) + one_hot.sum(dim=(0, 2, 3))
+        dice = (2 * inter + 1e-6) / (total + 1e-6)
+        return 1 - dice[1:].mean()                                    # on ignore le fond
+
+
+@torch.no_grad()
+def show_confusion(net, loader, title='', min_pixels=50):
+    """Matrice de confusion par pixel (4 x 4, normalisée par ligne) et détection du cœur par image.
+    Une image compte comme « cœur prédit » à partir de min_pixels pixels de cœur (un point isolé ne compte pas)."""
+    net.eval()
+    names = ['Fond', 'VD', 'Myo', 'VG']
+    matrix = np.zeros((4, 4))
+    found, missed, false_alarm, empty_ok = 0, 0, 0, 0
+
+    for images, labels, _ in loader:
+        pred = net(to_var(images)).argmax(dim=1).cpu()
+        target = getTargetSegmentation(labels)
+        # Par pixel : on compte chaque couple (vraie classe, classe prédite)
+        for t in range(4):
+            for p in range(4):
+                matrix[t, p] += ((target == t) & (pred == p)).sum().item()
+        # Par image : y a-t-il du cœur dans le vrai masque ? Et dans la prédiction ?
+        for k in range(len(target)):
+            heart_true = (target[k] > 0).any().item()
+            heart_pred = (pred[k] > 0).sum().item() >= min_pixels
+            if heart_true and heart_pred:
+                found += 1
+            elif heart_true:
+                missed += 1
+            elif heart_pred:
+                false_alarm += 1
+            else:
+                empty_ok += 1
+
+    matrix = matrix / matrix.sum(axis=1, keepdims=True)   # chaque ligne en pourcentage
+    fig, ax = plt.subplots(figsize=(5, 4.5))
+    ax.imshow(matrix, cmap='Blues', vmin=0, vmax=1)
+    for t in range(4):
+        for p in range(4):
+            color = 'white' if matrix[t, p] > 0.5 else 'black'
+            ax.text(p, t, '{:.1f} %'.format(100 * matrix[t, p]), ha='center', va='center', color=color)
+    ax.set_xticks(range(4))
+    ax.set_yticks(range(4))
+    ax.set_xticklabels(names)
+    ax.set_yticklabels(names)
+    ax.set_xlabel('Classe prédite')
+    ax.set_ylabel('Vraie classe')
+    ax.set_title('Matrice de confusion par pixel ' + title)
+    plt.tight_layout()
+    plt.show()
+
+    print('Détection du cœur par image :')
+    print('   images avec cœur  : trouvé {} / {}  (raté sur {})'.format(found, found + missed, missed))
+    print('   images sans cœur  : rien prédit {} / {}  (faux positifs sur {})'.format(
+        empty_ok, empty_ok + false_alarm, false_alarm))
