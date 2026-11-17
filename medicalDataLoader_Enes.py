@@ -1,6 +1,8 @@
 import os
 from random import random, randint
 
+import numpy as np
+import torch
 from PIL import Image, ImageOps, ImageEnhance
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as TF
@@ -19,6 +21,12 @@ def make_dataset(root, mode):
     for it_im, it_gt in zip(images, labels):
         items.append((os.path.join(img_path, it_im), os.path.join(mask_path, it_gt)))
     return items
+
+
+def make_unlabeled(root):
+    img_path = os.path.join(root, 'train', 'Img-Unlabeled')
+    images = sorted(f for f in os.listdir(img_path) if f.endswith('.png'))
+    return [os.path.join(img_path, f) for f in images]
 
 
 class MedicalImageDataset(Dataset):
@@ -83,3 +91,39 @@ class MedicalImageDataset(Dataset):
             mask = self.mask_transform(mask)
 
         return [img, mask, img_path]
+
+
+class UnlabeledDataset(Dataset):
+    def __init__(self, root_dir, transform=None):
+        self.imgs = make_unlabeled(root_dir)
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.imgs)
+
+    def __getitem__(self, index):
+        img = Image.open(self.imgs[index]).convert('L')
+        if self.transform:
+            img = self.transform(img)
+        return [img, self.imgs[index]]
+
+
+class PseudoLabelDataset(MedicalImageDataset):
+    def __init__(self, root_dir, masks, transform=None, augment=False, flip=True, scale=True, intensity=True):
+        self.imgs = make_unlabeled(root_dir)
+        self.masks = masks
+        self.transform = transform
+        self.augmentation = augment
+        self.flip = flip
+        self.scale = scale
+        self.intensity = intensity
+
+    def __getitem__(self, index):
+        img = Image.open(self.imgs[index]).convert('L')
+        mask = Image.fromarray(self.masks[index])
+        if self.augmentation:
+            img, mask = self.augment(img, mask)
+        if self.transform:
+            img = self.transform(img)
+        target = torch.from_numpy(np.array(mask)).long()
+        return [img, target, self.imgs[index]]

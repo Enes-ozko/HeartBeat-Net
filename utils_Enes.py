@@ -160,8 +160,11 @@ def show_augmentations(dataset, index=0, n=5):
 
 class DiceLoss(nn.Module):
     def forward(self, logits, target):
-        probs = torch.softmax(logits, dim=1)
-        one_hot = F.one_hot(target, 4).permute(0, 3, 1, 2).float()
+        valid = (target != 255).unsqueeze(1).float()
+        target = target.clone()
+        target[target == 255] = 0
+        probs = torch.softmax(logits, dim=1) * valid
+        one_hot = F.one_hot(target, 4).permute(0, 3, 1, 2).float() * valid
         inter = (probs * one_hot).sum(dim=(0, 2, 3))
         total = probs.sum(dim=(0, 2, 3)) + one_hot.sum(dim=(0, 2, 3))
         dice = (2 * inter + 1e-6) / (total + 1e-6)
@@ -216,3 +219,39 @@ def show_confusion(net, loader, title='', min_pixels=50, post_process=False):
     print('   images avec cœur  : trouvé {} / {}  (raté sur {})'.format(found, found + missed, missed))
     print('   images sans cœur  : rien prédit {} / {}  (faux positifs sur {})'.format(
         empty_ok, empty_ok + false_alarm, false_alarm))
+
+
+@torch.no_grad()
+def make_pseudo_labels(net, loader, threshold=0.9):
+    net.eval()
+    masks = []
+    for images, _ in loader:
+        probs = torch.softmax(net(to_var(images)), dim=1).cpu()
+        conf, pred = probs.max(dim=1)
+        pred = keep_largest_component(pred)
+        pred[conf < threshold] = 255
+        masks.append(pred.numpy().astype(np.uint8))
+    return np.concatenate(masks)
+
+
+def show_pseudo_labels(dataset, masks, indexes):
+    cmap = ListedColormap(['black', 'tab:red', 'tab:green', 'tab:blue', 'white'])
+    fig, axes = plt.subplots(2, len(indexes), figsize=(3 * len(indexes), 6.5))
+    for k, i in enumerate(indexes):
+        img, _ = dataset[i]
+        mask = masks[i].copy()
+        mask[mask == 255] = 4
+        axes[0, k].imshow(img[0], cmap='gray')
+        axes[1, k].imshow(mask, cmap=cmap, vmin=0, vmax=4, interpolation='nearest')
+        axes[0, k].set_title('Image {}'.format(i))
+        for ax in axes[:, k]:
+            ax.set_xticks([])
+            ax.set_yticks([])
+    axes[0, 0].set_ylabel('Image')
+    axes[1, 0].set_ylabel('Pseudo-label')
+    legend = [Patch(color=cmap(c), label=name) for c, name in
+              enumerate(['Fond', 'VD', 'Myocarde', 'VG', 'Ignoré'])]
+    legend[4].set_edgecolor('black')
+    fig.legend(handles=legend, loc='lower center', ncol=5, frameon=False)
+    fig.suptitle('Pseudo-labels du modèle 1A (pixels ignorés en blanc)')
+    plt.show()
