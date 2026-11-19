@@ -15,10 +15,11 @@ semi-supervised/   Tâche 1B : semi-supervisé
   figures_Enes.ipynb          figures et tableau du rapport
   UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py
 classification/    Tâche 2 : diagnostic (NOR, MINF, DCM, HCM, RV) par transfert de l'encodeur du UNet
-  classification_Enes.ipynb   validation croisée 5 plis par patient, modèle final (réglage FREEZE)
-  classification_Enes.py      paires ED/ES par patient, dataset, modèle (encodeur + tête)
-  groupes.csv                 diagnostic de chaque patient (tiré de MetaData)
-  UNet_Base_Enes.py
+  classification_Enes.ipynb          méthode retenue : mesures du cœur par le UNet + petit réseau
+  classificationEncodeur_Enes.ipynb  essai 1 : encodeur du UNet + tête (réglage FREEZE)
+  classification_Enes.py             patients, paires ED/ES, mesures du cœur, modèles
+  groupes.csv                        diagnostic de chaque patient (tiré de MetaData)
+  UNet_Base_Enes.py, utils_Enes.py
 ```
 
 | Fichier | Rôle |

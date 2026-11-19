@@ -7,7 +7,10 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 from torch.utils.data import Dataset
 
+from utils_Enes import keep_largest_component
+
 CLASSES = ['NOR', 'MINF', 'DCM', 'HCM', 'RV']
+FEATURES = ['VG ED', 'VG ES', 'VD ED', 'VD ES', 'Myo ED', 'Myo ES', 'FE VG', 'FE VD', 'VD/VG', 'Myo/VG']
 
 
 def load_groups(csv_path):
@@ -69,3 +72,33 @@ class Classifier(nn.Module):
 
     def forward(self, ed, es):
         return self.head(torch.cat([self.features(ed), self.features(es)], dim=1))
+
+
+@torch.no_grad()
+def volumes(unet, paths, device):
+    images = torch.stack([TF.to_tensor(Image.open(p).convert('L')) for p in paths])
+    pred = keep_largest_component(unet(images.to(device)).argmax(dim=1).cpu())
+    return [(pred == c).sum().item() for c in [1, 2, 3]]
+
+
+def heart_features(unet, scan, device):
+    ed, es = sorted(scan)
+    vd_ed, myo_ed, vg_ed = volumes(unet, list(scan[ed].values()), device)
+    vd_es, myo_es, vg_es = volumes(unet, list(scan[es].values()), device)
+    vg_ed, vd_ed = max(vg_ed, 1), max(vd_ed, 1)
+    return [vg_ed, vg_es, vd_ed, vd_es, myo_ed, myo_es,
+            (vg_ed - vg_es) / vg_ed, (vd_ed - vd_es) / vd_ed, vd_ed / vg_ed, myo_ed / vg_ed]
+
+
+class FeatureClassifier(nn.Module):
+    def __init__(self, n_features, hidden):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_features, hidden),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(hidden, len(CLASSES)),
+        )
+
+    def forward(self, x):
+        return self.net(x)
