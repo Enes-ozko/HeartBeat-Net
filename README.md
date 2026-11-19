@@ -26,6 +26,10 @@ Les `.py` sont copiés dans chaque dossier pour que chaque partie soit autonome.
 
 ## Lancer
 
+Sur Kaggle (GPU activé, données ACDC ajoutées) : ouvrir `run_kaggle_Enes.ipynb` et tout lancer. Il entraîne toute la tâche 1 dans l'ordre ci-dessous et met les modèles et les figures dans `/kaggle/working/resultats.zip`.
+
+À la main :
+
 Les données sont dans `Data/`, à côté du dossier `HeartBeat-Net` (sur Kaggle, le chemin est choisi automatiquement). Chaque notebook se lance depuis son dossier.
 
 1. `baseline/mainSegmentationChallenge_Enes.ipynb` → `baseline/models/final_dice/`
