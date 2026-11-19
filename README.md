@@ -7,21 +7,20 @@ Segmentation IRM cardiaque (ACDC) : fond, ventricule droit (VD), myocarde (Myo),
 ```
 baseline/          Tâche 1A : baseline supervisée
   mainSegmentationChallenge_Enes.ipynb
-  UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py, progressBar.py
+  UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py
 semi-supervised/   Tâche 1B : semi-supervisé
   semiSupervised_Enes.ipynb   essai 1 : pseudo-labels
   meanTeacher_Enes.ipynb      méthode retenue : Mean Teacher (réglage FINAL)
   predict_Enes.ipynb          prédiction avec le modèle final, masques PNG (réglage TEST_DIR)
   figures_Enes.ipynb          figures et tableau du rapport
-  UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py, progressBar.py
+  UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py
 ```
 
 | Fichier | Rôle |
 |---|---|
 | `UNet_Base_Enes.py` | UNet (32 → 512 filtres, padding) |
-| `medicalDataLoader_Enes.py` | Chargement des données, augmentation, images non annotées, pseudo-labels |
-| `utils_Enes.py` | Dice, Hausdorff, DiceLoss, post-traitement, figures |
-| `progressBar.py` | Barre de progression (code du prof) |
+| `medicalDataLoader_Enes.py` | Chargement des données (masque → classes 0 à 3), augmentation, images non annotées, pseudo-labels |
+| `utils_Enes.py` | DiceLoss, Dice, Hausdorff, post-traitement, évaluation, pseudo-labels, figures |
 
 Les `.py` sont copiés dans chaque dossier pour que chaque partie soit autonome.
 
