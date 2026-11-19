@@ -2,20 +2,28 @@
 
 Segmentation IRM cardiaque (ACDC) : fond, ventricule droit (VD), myocarde (Myo), ventricule gauche (VG).
 
-## Fichiers (version Enes)
+## Organisation (branche enes)
+
+```
+baseline/          Tâche 1A : baseline supervisée
+  mainSegmentationChallenge_Enes.ipynb
+  UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py, progressBar.py
+semi-supervised/   Tâche 1B : semi-supervisé
+  semiSupervised_Enes.ipynb   essai 1 : pseudo-labels
+  meanTeacher_Enes.ipynb      méthode retenue : Mean Teacher (variables SEED, FINAL)
+  predict_Enes.ipynb          évaluation, ensemble, masques PNG (variables MODELS, TEST_DIR)
+  figures_Enes.ipynb          figures et tableau du rapport
+  UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py, progressBar.py
+```
 
 | Fichier | Rôle |
 |---|---|
 | `UNet_Base_Enes.py` | UNet (32 → 512 filtres, padding) |
 | `medicalDataLoader_Enes.py` | Chargement des données, augmentation, images non annotées, pseudo-labels |
 | `utils_Enes.py` | Dice, Hausdorff, DiceLoss, post-traitement, figures |
-| `mainSegmentationChallenge_Enes.ipynb` | Tâche 1A : baseline supervisée |
-| `semiSupervised_Enes.ipynb` | Tâche 1B, essai 1 : pseudo-labels |
-| `meanTeacher_Enes.ipynb` | Tâche 1B, méthode retenue : Mean Teacher (variables `SEED`, `FINAL`) |
-| `predict_Enes.ipynb` | Évaluation, ensemble de modèles, masques PNG (variables `MODELS`, `TEST_DIR`) |
-| `figures_Enes.ipynb` | Figures et tableau du rapport |
+| `progressBar.py` | Barre de progression (code du prof) |
 
-Les fichiers sans suffixe sont ceux du prof, les `_Nadir` ceux de Nadir.
+Les `.py` sont copiés dans chaque dossier pour que chaque partie soit autonome.
 
 ## Lancer
 
