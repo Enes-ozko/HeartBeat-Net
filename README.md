@@ -14,6 +14,11 @@ semi-supervised/   Tâche 1B : semi-supervisé
   predict_Enes.ipynb          prédiction avec le modèle final, masques PNG (réglage TEST_DIR)
   figures_Enes.ipynb          figures et tableau du rapport
   UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py
+classification/    Tâche 2 : diagnostic (NOR, MINF, DCM, HCM, RV) par transfert de l'encodeur du UNet
+  classification_Enes.ipynb   validation croisée 5 plis par patient, modèle final (réglage FREEZE)
+  classification_Enes.py      paires ED/ES par patient, dataset, modèle (encodeur + tête)
+  groupes.csv                 diagnostic de chaque patient (tiré de MetaData)
+  UNet_Base_Enes.py
 ```
 
 | Fichier | Rôle |
