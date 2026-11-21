@@ -32,7 +32,7 @@ Les `.py` sont copiés dans chaque dossier pour que chaque partie soit autonome.
 
 ## Lancer
 
-Sur Kaggle (GPU activé, dataset acdc-heartbeat ajouté) : importer `run_kaggle_Enes.ipynb` et faire Save & Run All. Il lance tout le projet dans l'ordre ci-dessous (environ 2 h) et met modèles, figures et prédictions dans `/kaggle/working/resultats.zip`.
+Sur Kaggle (GPU, dataset acdc-heartbeat, Internet activés) : cloner la branche `enes`, puis lancer chaque notebook depuis son dossier (`%cd` puis `%run`), dans l'ordre ci-dessous.
 
 À la main :
 
