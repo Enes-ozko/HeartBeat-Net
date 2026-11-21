@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from scipy.ndimage import binary_erosion, label
-from scipy.spatial.distance import directed_hausdorff
+from scipy.spatial.distance import directed_hausdorff, cdist
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 CLASSES = ['Fond', 'VD', 'Myo', 'VG']
@@ -51,6 +51,21 @@ def hausdorff_per_class(pred, target):
     return result
 
 
+def asd_per_class(pred, target):
+    result = []
+    for c in [1, 2, 3]:
+        distances = []
+        for p, t in zip(pred.numpy() == c, target.numpy() == c):
+            if not p.any() or not t.any():
+                continue
+            p_border = np.argwhere(p & ~binary_erosion(p))
+            t_border = np.argwhere(t & ~binary_erosion(t))
+            d = cdist(p_border, t_border)
+            distances.append(np.concatenate([d.min(axis=1), d.min(axis=0)]).mean())
+        result.append(np.mean(distances) if distances else float('nan'))
+    return result
+
+
 def keep_largest_component(pred):
     pred = pred.clone()
     for k in range(len(pred)):
@@ -78,6 +93,15 @@ def evaluate(net, loader, post_process=False):
     if post_process:
         pred = keep_largest_component(pred)
     return dice_per_class(pred, target), hausdorff_per_class(pred, target)
+
+
+@torch.no_grad()
+def validation_ce(net, loader):
+    net.eval()
+    losses = []
+    for images, labels in loader:
+        losses.append(F.cross_entropy(net(images.to(device)), labels.to(device)).item())
+    return np.mean(losses)
 
 
 @torch.no_grad()
