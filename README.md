@@ -32,7 +32,7 @@ Les `.py` sont copiés dans chaque dossier pour que chaque partie soit autonome.
 
 ## Lancer
 
-Sur Kaggle (GPU activé, données ACDC ajoutées) : ouvrir `run_kaggle_Enes.ipynb` et tout lancer. Il entraîne toute la tâche 1 dans l'ordre ci-dessous et met les modèles et les figures dans `/kaggle/working/resultats.zip`.
+Sur Kaggle (GPU activé, dataset acdc-heartbeat ajouté) : importer `run_kaggle_Enes.ipynb` et faire Save & Run All. Il lance tout le projet dans l'ordre ci-dessous (environ 2 h) et met modèles, figures et prédictions dans `/kaggle/working/resultats.zip`.
 
 À la main :
 
