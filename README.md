@@ -46,14 +46,27 @@ Les données sont dans `Data/`, à côté du dossier `HeartBeat-Net` (sur Kaggle
 4. `semi-supervised/predict_Enes.ipynb` : mettre `TEST_DIR` sur le dossier des images de test → masques PNG (0, 85, 170, 255) et `predictions_test.zip`
 5. `semi-supervised/figures_Enes.ipynb` : figures et tableau du rapport
 
-## Résultats (validation, 74 images)
+## Résultats (run final du 22/11/2026)
 
-| Méthode | Dice moyen, 10 dernières époques | Dice + post-traitement | Hausdorff VD / Myo / VG (px) |
-|---|---|---|---|
-| 1A supervisé | 0.815 | 0.840 | 13.4 / 9.8 / 4.6 |
-| Pseudo-labels | 0.771 | 0.807 | 14.6 / 14.0 / 5.8 |
-| Mean Teacher, graine 0 | 0.840 | 0.839 | 14.3 / 9.2 / 4.9 |
-| Mean Teacher, graine 1 | 0.844 | 0.847 | 12.7 / 8.1 / 4.2 |
+### Tâche 1 : segmentation (validation, 74 images)
 
-Deux graines ont été testées pour vérifier que le gain de Mean Teacher est reproductible.
-Modèle rendu : un seul Mean Teacher (graine 0) ré-entraîné sur train + val (`models/mean_teacher_final/last.pth`).
+Dernier modèle de chaque méthode, avec post-traitement. ASD = distance moyenne entre les contours, Hausdorff = la pire.
+
+| Méthode | Dice moyen, 10 dernières époques | CE | Dice VD / Myo / VG | Hausdorff VD / Myo / VG (px) | ASD VD / Myo / VG (px) | Paramètres |
+|---|---|---|---|---|---|---|
+| 1A supervisé | 0.818 | 0.039 | 0.807 / 0.754 / 0.897 | 15.1 / 10.4 / 5.6 | 4.71 / 2.50 / 1.73 | 3 844 388 |
+| Pseudo-labels | 0.778 | 0.061 | 0.767 / 0.696 / 0.853 | 17.7 / 15.4 / 7.5 | 5.50 / 3.81 / 2.69 | 3 844 388 |
+| **Mean Teacher** | **0.854** | **0.027** | **0.841 / 0.786 / 0.926** | **12.3 / 9.8 / 4.1** | **4.06 / 2.26 / 1.24** | 3 844 388 |
+
+Mean Teacher est le meilleur sur toutes les métriques, avec le même réseau. Les runs précédents donnaient 0.840 et 0.844 : le gain est reproductible.
+Modèle rendu : Mean Teacher ré-entraîné sur train + val (`semi-supervised/models/mean_teacher_final/last.pth`).
+
+### Tâche 2 : diagnostic (validation croisée 5 plis par patient, 66 patients)
+
+| Méthode | Patients bien classés |
+|---|---|
+| Encodeur du UNet gelé + tête | 18 / 66 = 27 % |
+| Encodeur du UNet fine-tuné + tête | 17 / 66 = 26 % |
+| **Mesures du coeur par le UNet + ensemble de 10 réseaux** | **56 / 66 = 84.8 %** |
+
+Modèle rendu : `classification/models/classifier.pth`.
