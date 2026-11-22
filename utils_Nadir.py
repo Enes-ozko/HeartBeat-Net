@@ -107,6 +107,7 @@ def inference(net, img_batch, modelName, epoch):
             os.path.join(path, str(i) + '.png'), padding=0)
 
     printProgressBar(total, total, done="[Inference] Segmentation Done !")
+    
 
     losses = np.asarray(losses)
 
@@ -116,4 +117,14 @@ def inference(net, img_batch, modelName, epoch):
 class MaskToTensor(object):
     def __call__(self, img):
         return torch.from_numpy(np.array(img, dtype=np.int32)).float()
+
+def dice_per_class(pred, gt, n_classes=4):
+    # pred, gt : tenseurs (B, H, W) contenant des classes 0, 1, 2, 3
+    dices = []
+    for c in range(1, n_classes):          # on ignore le fond (classe 0)
+        p = (pred == c).float()
+        g = (gt == c).float()
+        inter = (p * g).sum()
+        dices.append(((2 * inter + 1e-8) / (p.sum() + g.sum() + 1e-8)).item())
+    return dices                            # [Dice classe 1, classe 2, classe 3]
 
