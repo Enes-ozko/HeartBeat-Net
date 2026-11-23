@@ -6,7 +6,7 @@ from torch.autograd import Variable
 import torchvision
 import os
 import skimage.transform as skiTransf
-from progressBar import printProgressBar
+from progressBar_Nadir import printProgressBar
 import scipy.io as sio
 import pdb
 import time

@@ -14,6 +14,11 @@ Choix techniques :
   (mêmes listes triées d'images et de masques, appariées dans l'ordre) ;
 - les classes sont nommées « classe 1/2/3 » : la correspondance avec VD / myocarde / VG
   reste à vérifier visuellement.
+
+Règle d'évaluation (la même que la branche d'Enes) : on n'utilise PAS la meilleure époque,
+car la choisir sur la validation puis rapporter son score sur cette même validation donne un
+chiffre optimiste. On évalue le DERNIER modèle (models/<nom>/last_model) et on choisit le lr
+sur le Dice de validation moyenné sur les N_DERNIERES dernières époques.
 """
 
 import csv
@@ -47,6 +52,23 @@ COULEURS_CLASSES = ['#000000', '#2a78d6', '#eb6834', '#1baf7a']
 COULEUR_ERREUR = '#d55181'      # magenta : distinct des 3 couleurs de classes
 COULEUR_MOYENNE = '#222222'     # encre foncée pour la courbe « moyenne »
 CMAP_CLASSES = ListedColormap(COULEURS_CLASSES)
+
+# Nombre d'époques finales sur lesquelles on moyenne le Dice de validation (règle d'Enes)
+N_DERNIERES = 10
+
+
+def moyenne_dernieres_epoques(history, n=N_DERNIERES):
+    """Métriques de validation moyennées sur les n dernières époques de history.
+
+    Renvoie dice_moyen_dernieres (critère de choix du lr), son écart-type (stabilité de
+    la fin d'entraînement), le Dice par classe et la CE de validation sur ces époques.
+    """
+    d = np.asarray(history['val_dice_mean'][-n:], dtype=float)
+    par_classe = np.asarray(history['val_dice'][-n:], dtype=float).mean(axis=0)
+    return {'dice_moyen_dernieres': float(d.mean()),
+            'dice_ecart_type_dernieres': float(d.std()),
+            'dice_dernieres_par_classe': [float(x) for x in par_classe],
+            'ce_val_dernieres': float(np.mean(history['val_ce'][-n:]))}
 
 
 # --------------------------------------------------------------------------------------
@@ -268,11 +290,13 @@ def calculer_metriques(preds, gt, ce, nb_parametres):
 def figure_courbes_apprentissage(history, chemin_png, titre=None):
     """(a) perte d'entraînement et CE de validation ; (b) Dice de validation par époque.
 
-    Les époques sont numérotées à partir de 1 ; la meilleure époque est marquée.
+    Les époques sont numérotées à partir de 1 ; la zone grisée = les N_DERNIERES dernières
+    époques, celles qui servent au score rapporté (le modèle évalué est le dernier).
     """
     n = len(history['train_loss'])
     ep = np.arange(1, n + 1)
-    best = int(history['best_epoch']) + 1
+    k = min(N_DERNIERES, n)
+    fin = moyenne_dernieres_epoques(history, k)
     dices = np.asarray(history['val_dice'])      # (n, 3)
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
@@ -297,9 +321,11 @@ def figure_courbes_apprentissage(history, chemin_png, titre=None):
     ax.set_ylim(0, 1)
     ax.set_title("(b) Dice de validation par époque")
 
+    axes[0].axvspan(n - k + 0.5, n + 0.5, color='#888888', alpha=0.2,
+                    label='{} dernières époques'.format(k))
+    axes[1].axvspan(n - k + 0.5, n + 0.5, color='#888888', alpha=0.2,
+                    label='{} dernières époques (moy. {:.3f})'.format(k, fin['dice_moyen_dernieres']))
     for ax in axes:
-        ax.axvline(best, color='#888888', linestyle=':', linewidth=1,
-                   label='Meilleure époque ({})'.format(best))
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=8)
         if n <= 20:
@@ -401,35 +427,37 @@ def figure_qualitative(images, gt, preds, choix, noms, dices_coupes, chemin_png)
 # D. Sensibilité au learning rate (compare les lr : tracée après le balayage)
 # --------------------------------------------------------------------------------------
 def figure_balayage_lr(historiques, chemin_png):
-    """(a) Meilleur Dice selon le lr ; (b) Dice moyen de validation par époque pour chaque lr.
+    """(a) Dice final (moyenne des N_DERNIERES dernières époques) selon le lr ;
+    (b) Dice moyen de validation par époque pour chaque lr.
 
     Couleurs de classes communes aux autres figures, époques numérotées à partir de 1.
     """
     lrs = list(historiques.keys())
-    hist = historiques
+    fins = [moyenne_dernieres_epoques(historiques[lr]) for lr in lrs]
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
-    # (a) Meilleur Dice de validation en fonction du learning rate
+    # (a) Dice de fin d'entraînement en fonction du learning rate (barres = écart-type)
     ax = axes[0]
-    best_mean = [hist[lr]['best_dice'] for lr in lrs]
-    per_class = np.array([hist[lr]['val_dice'][hist[lr]['best_epoch']] for lr in lrs])
+    per_class = np.array([f['dice_dernieres_par_classe'] for f in fins])
     for c in range(3):
         ax.plot(lrs, per_class[:, c], marker='o', linestyle='--', linewidth=1,
                 color=COULEURS_CLASSES[c + 1], label='Classe {}'.format(c + 1))
-    ax.plot(lrs, best_mean, marker='o', linewidth=2.5, color=COULEUR_MOYENNE, label='Moyenne')
+    ax.errorbar(lrs, [f['dice_moyen_dernieres'] for f in fins],
+                yerr=[f['dice_ecart_type_dernieres'] for f in fins],
+                marker='o', linewidth=2.5, capsize=3, color=COULEUR_MOYENNE, label='Moyenne')
     ax.set_xscale('log')
     ax.set_xlabel("Learning rate")
-    ax.set_ylabel("Dice de validation (meilleure époque)")
+    ax.set_ylabel("Dice de validation\n(moy. des {} dernières époques)".format(N_DERNIERES))
     ax.set_ylim(0, 1)
     ax.grid(True, alpha=0.3)
     ax.legend()
-    ax.set_title("(a) Meilleur Dice selon le learning rate")
+    ax.set_title("(a) Dice de fin d'entraînement selon le lr")
 
     # (b) Évolution du Dice moyen de validation par époque
     ax = axes[1]
     cmap = plt.cm.viridis
     for k, lr in enumerate(lrs):
-        y = hist[lr]['val_dice_mean']
+        y = historiques[lr]['val_dice_mean']
         ax.plot(np.arange(1, len(y) + 1), y, color=cmap(k / max(len(lrs) - 1, 1)),
                 label='lr = {}'.format(lr))
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))   # époques entières
@@ -456,21 +484,24 @@ def evaluer_entrainement(nom, history, images, gt, noms, construire=None,
                          dossier_modeles='models', figures=True, seed=0):
     """À appeler juste après l'entraînement d'un modèle (un lr) : tout est fait en une fois.
 
-    1. charge models/<nom>/best_model et prédit la validation une seule fois ;
-    2. calcule toutes les métriques (CE, Dice, Hausdorff, ASD, nb de paramètres) et les
-       écrit dans Results/Statistics/<nom>/metrics.json ;
+    1. charge models/<nom>/last_model (le DERNIER modèle, pas la meilleure époque) et
+       prédit la validation une seule fois ;
+    2. calcule toutes les métriques de ce modèle (CE, Dice, Hausdorff, ASD, nb de
+       paramètres), y ajoute le Dice moyen des N_DERNIERES dernières époques (lu dans
+       history, critère de choix du lr) et écrit le tout dans
+       Results/Statistics/<nom>/metrics.json ;
     3. si figures=True, trace les courbes d'apprentissage et la figure qualitative de ce
        modèle dans Results/Figures/<nom>/ (figures fermées : rien ne s'affiche ici).
     Renvoie le dictionnaire des métriques.
     """
-    net = charger_modele(os.path.join(dossier_modeles, nom, 'best_model'), construire)
+    net = charger_modele(os.path.join(dossier_modeles, nom, 'last_model'), construire)
     preds, ce = predire_et_ce(net, images, gt)
     m = calculer_metriques(preds, gt, ce, compter_parametres(net))
+    m.update(moyenne_dernieres_epoques(history))
     m.update({'nom': nom,
               'lr': history.get('lr'),
-              'meilleure_epoque': int(history['best_epoch']) + 1,
               'n_epoques': len(history['train_loss']),
-              'best_dice_history': float(history['best_dice'])})
+              'dice_derniere_epoque_history': float(history['val_dice_mean'][-1])})
 
     os.makedirs(os.path.join(DOSSIER_STATS, nom), exist_ok=True)
     with open(os.path.join(DOSSIER_STATS, nom, 'metrics.json'), 'w', encoding='utf-8') as f:
@@ -521,9 +552,10 @@ MODELES_PAR_DEFAUT = [
     {'nom': 'Baseline', 'construire': lambda: UNet(N_CLASSES), 'dossier': 'lr_{lr}'},
 ]
 
-COLONNES_COMPARAISON = ['lr', 'modele', 'ce_moyenne', 'dice_moyen', 'hd_moyenne_px',
-                        'asd_moyenne_px', 'nb_parametres']
-ENTETES_COMPARAISON = ['lr', 'Modèle', 'CE moyenne', 'Dice moyen', 'Hausdorff moyen (px)',
+COLONNES_COMPARAISON = ['lr', 'modele', 'dice_moyen_dernieres', 'ce_moyenne', 'dice_moyen',
+                        'hd_moyenne_px', 'asd_moyenne_px', 'nb_parametres']
+ENTETES_COMPARAISON = ['lr', 'Modèle', 'Dice moyen ({} dernières ép.)'.format(N_DERNIERES),
+                       'CE (dernier modèle)', 'Dice (dernier modèle)', 'Hausdorff moyen (px)',
                        'ASD moyenne (px)', 'Nb paramètres']
 
 
@@ -542,8 +574,8 @@ def tableau_comparatif(lrs, modeles=None):
             met = lire_metriques(m['dossier'].format(lr=lr))
             if met is None:
                 print("[Avertissement] pas de metrics.json pour {} (lr = {})".format(m['nom'], lr))
-                met = {'ce_moyenne': nan, 'dice_moyen': nan, 'hd_moyenne_px': nan,
-                       'asd_moyenne_px': nan,
+                met = {'dice_moyen_dernieres': nan, 'ce_moyenne': nan, 'dice_moyen': nan,
+                       'hd_moyenne_px': nan, 'asd_moyenne_px': nan,
                        'nb_parametres': compter_parametres(m['construire']())}
             ligne = {c: met[c] for c in COLONNES_COMPARAISON[2:]}
             ligne.update({'lr': lr, 'modele': m['nom']})
