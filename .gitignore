@@ -4,3 +4,5 @@ Results/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
+resultat_Nadir.ipynb
+*.zip
