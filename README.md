@@ -10,7 +10,7 @@ baseline/          Tâche 1A : baseline supervisée
   UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py
 semi-supervised/   Tâche 1B : semi-supervisé
   semiSupervised_Enes.ipynb   essai 1 : pseudo-labels
-  meanTeacher_Enes.ipynb      méthode retenue : Mean Teacher (modèle rendu)
+  meanTeacher_Enes.ipynb      méthode retenue : Mean Teacher (réglage FINAL)
   predict_Enes.ipynb          prédiction avec le modèle final, masques PNG (réglage TEST_DIR)
   figures_Enes.ipynb          figures et tableau du rapport
   UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py
@@ -41,7 +41,8 @@ Les données sont dans `Data/`, à côté du dossier `HeartBeat-Net` (sur Kaggle
 1. `baseline/mainSegmentationChallenge_Enes.ipynb` → `baseline/models/final_dice/`
 2. `semi-supervised/semiSupervised_Enes.ipynb` → `models/pseudo_labels/` (utilise le modèle de la baseline)
 3. `semi-supervised/meanTeacher_Enes.ipynb`
-   entraînement sur train (+ les images sans masque), évaluation sur val → `models/mean_teacher/last.pth` (**modèle rendu**)
+   - `FINAL = False` : entraînement sur train, évaluation sur val → `models/mean_teacher/` (comparaison du rapport)
+   - `FINAL = True` : entraînement sur train + val → `models/mean_teacher_final/` (**modèle rendu**)
 4. `semi-supervised/predict_Enes.ipynb` : mettre `TEST_DIR` sur le dossier des images de test → masques PNG (0, 85, 170, 255) et `predictions_test.zip`
 5. `semi-supervised/figures_Enes.ipynb` : figures et tableau du rapport
 
@@ -58,7 +59,7 @@ Dernier modèle de chaque méthode, avec post-traitement. ASD = distance moyenne
 | **Mean Teacher** | **0.854** | **0.027** | **0.841 / 0.786 / 0.926** | **12.3 / 9.8 / 4.1** | **4.06 / 2.26 / 1.24** | 3 844 388 |
 
 Mean Teacher est le meilleur sur toutes les métriques, avec le même réseau. Les runs précédents donnaient 0.840 et 0.844 : le gain est reproductible.
-Modèle rendu : ce Mean Teacher (`semi-supervised/models/mean_teacher/last.pth`).
+Modèle rendu : Mean Teacher ré-entraîné sur train + val (`semi-supervised/models/mean_teacher_final/last.pth`).
 
 ### Tâche 2 : diagnostic (validation croisée 5 plis par patient, 66 patients)
 

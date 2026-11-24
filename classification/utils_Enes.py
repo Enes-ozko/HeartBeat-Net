@@ -23,17 +23,6 @@ class DiceLoss(nn.Module):
         return 1 - dice[1:].mean()
 
 
-class FocalLoss(nn.Module):
-    def __init__(self, gamma=2):
-        super().__init__()
-        self.gamma = gamma
-
-    def forward(self, logits, target):
-        ce = F.cross_entropy(logits, target, reduction='none', ignore_index=255)
-        pt = torch.exp(-ce)
-        return ((1 - pt) ** self.gamma * ce).mean()
-
-
 def dice_per_class(pred, target):
     dices = []
     for c in [1, 2, 3]:

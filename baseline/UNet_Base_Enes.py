@@ -16,19 +16,13 @@ def initialize_weights(*models):
 
 
 class _EncoderBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, dropout=False, double=False):
+    def __init__(self, in_channels, out_channels, dropout=False):
         super().__init__()
         layers = [
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
         ]
-        if double:
-            layers += [
-                nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-                nn.BatchNorm2d(out_channels),
-                nn.ReLU(inplace=True),
-            ]
         if dropout:
             layers.append(nn.Dropout())
         layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
@@ -39,37 +33,30 @@ class _EncoderBlock(nn.Module):
 
 
 class _DecoderBlock(nn.Module):
-    def __init__(self, in_channels, middle_channels, out_channels, double=False):
+    def __init__(self, in_channels, middle_channels, out_channels):
         super().__init__()
-        layers = [
+        self.decode = nn.Sequential(
             nn.Conv2d(in_channels, middle_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(middle_channels),
             nn.ReLU(inplace=True),
-        ]
-        if double:
-            layers += [
-                nn.Conv2d(middle_channels, middle_channels, kernel_size=3, padding=1),
-                nn.BatchNorm2d(middle_channels),
-                nn.ReLU(inplace=True),
-            ]
-        layers.append(nn.ConvTranspose2d(middle_channels, out_channels, kernel_size=2, stride=2))
-        self.decode = nn.Sequential(*layers)
+            nn.ConvTranspose2d(middle_channels, out_channels, kernel_size=2, stride=2),
+        )
 
     def forward(self, x):
         return self.decode(x)
 
 
 class UNet(nn.Module):
-    def __init__(self, num_classes, double=False):
+    def __init__(self, num_classes):
         super().__init__()
-        self.enc1 = _EncoderBlock(1, 32, double=double)
-        self.enc2 = _EncoderBlock(32, 64, double=double)
-        self.enc3 = _EncoderBlock(64, 128, double=double)
-        self.enc4 = _EncoderBlock(128, 256, dropout=True, double=double)
-        self.center = _DecoderBlock(256, 512, 256, double=double)
-        self.dec4 = _DecoderBlock(512, 256, 128, double=double)
-        self.dec3 = _DecoderBlock(256, 128, 64, double=double)
-        self.dec2 = _DecoderBlock(128, 64, 32, double=double)
+        self.enc1 = _EncoderBlock(1, 32)
+        self.enc2 = _EncoderBlock(32, 64)
+        self.enc3 = _EncoderBlock(64, 128)
+        self.enc4 = _EncoderBlock(128, 256, dropout=True)
+        self.center = _DecoderBlock(256, 512, 256)
+        self.dec4 = _DecoderBlock(512, 256, 128)
+        self.dec3 = _DecoderBlock(256, 128, 64)
+        self.dec2 = _DecoderBlock(128, 64, 32)
         self.dec1 = nn.Sequential(
             nn.Conv2d(64, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
