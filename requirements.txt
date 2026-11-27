@@ -4,3 +4,6 @@ numpy
 pillow
 scipy
 matplotlib
+scikit-image
+pandas
+medpy
