@@ -1,72 +1,97 @@
 # HeartBeat-Net
 
-Segmentation IRM cardiaque (ACDC) : fond, ventricule droit (VD), myocarde (Myo), ventricule gauche (VG).
+Projet MTI865 : segmentation semi-supervisée et diagnostic automatique sur IRM cardiaque (challenge ACDC).
 
-## Organisation (branche enes)
+- **Tâche 1, segmentation** : pour chaque pixel, fond, ventricule droit (VD), myocarde (Myo) ou ventricule gauche (VG).
+- **Tâche 2, diagnostic** : groupe du patient parmi NOR, MINF, DCM, HCM et RV, par transfert depuis le réseau de segmentation.
 
-```
-baseline/          Tâche 1A : baseline supervisée
-  mainSegmentationChallenge_Enes.ipynb
-  UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py
-semi-supervised/   Tâche 1B : semi-supervisé
-  semiSupervised_Enes.ipynb   essai 1 : pseudo-labels
-  meanTeacher_Enes.ipynb      méthode retenue : Mean Teacher (réglage FINAL)
-  predict_Enes.ipynb          prédiction avec le modèle final, masques PNG (réglage TEST_DIR)
-  figures_Enes.ipynb          figures et tableau du rapport
-  UNet_Base_Enes.py, medicalDataLoader_Enes.py, utils_Enes.py
-classification/    Tâche 2 : diagnostic (NOR, MINF, DCM, HCM, RV) par transfert de l'encodeur du UNet
-  classification_Enes.ipynb          méthode retenue : mesures du cœur par le UNet + petit réseau
-  classificationEncodeur_Enes.ipynb  essai 1 : encodeur du UNet + tête (réglage FREEZE)
-  classification_Enes.py             patients, paires ED/ES, mesures du cœur, modèles
-  groupes.csv                        diagnostic de chaque patient (tiré de MetaData)
-  UNet_Base_Enes.py, utils_Enes.py
+## Évaluer nos modèles (pour le correcteur)
+
+Les modèles entraînés sont inclus dans le dépôt. Les données ACDC doivent être dans un dossier `Data/` placé à côté du dossier `HeartBeat-Net` (`Data/train`, `Data/val`) ; sur Kaggle, le chemin est trouvé tout seul.
+
+```bash
+pip install -r requirements.txt
 ```
 
-| Fichier | Rôle |
+**Segmentation** (depuis `semi-supervised/`) :
+
+```bash
+python3 evaluer_segmentation.py models/mean_teacher/last.pth eval
+python3 evaluer_segmentation.py models/mean_teacher_final/last.pth predict <dossier_des_images>
+```
+
+- `eval` : Dice, Hausdorff et ASD sur la validation (avec post-traitement).
+- `predict` : un masque PNG par image (valeurs 0, 85, 170, 255, même nom que l'image) dans `predictions_test/`.
+
+**Diagnostic** (depuis `classification/`) :
+
+```bash
+python3 evaluer_classification.py ../semi-supervised/models/mean_teacher_final/last.pth models/classifier.pth eval
+python3 evaluer_classification.py ../semi-supervised/models/mean_teacher_final/last.pth models/classifier.pth predict <dossier_des_images>
+```
+
+- `eval` : patients bien classés et rappel par classe, comparés à `groupes.csv`.
+- `predict` : `predictions_diagnostic.csv` (patient, groupe prédit, confiance). Les images doivent s'appeler `patientXXX_YY_ZZ.png` (patient, instant, coupe), avec les deux instants ED et ES.
+
+Les deux scripts choisissent CUDA ou CPU tout seuls.
+
+## Modèles inclus
+
+| Fichier | Contenu |
 |---|---|
-| `UNet_Base_Enes.py` | UNet (32 → 512 filtres, padding) |
-| `medicalDataLoader_Enes.py` | Chargement des données (masque → classes 0 à 3), augmentation, images non annotées, pseudo-labels |
-| `utils_Enes.py` | DiceLoss, Dice, Hausdorff, post-traitement, évaluation, pseudo-labels, figures |
+| `baseline/models/final_dice/last.pth` | baseline+ : UNet amélioré, supervisé |
+| `semi-supervised/models/pseudo_labels/last.pth` | essai semi-supervisé : pseudo-labels |
+| `semi-supervised/models/mean_teacher/last.pth` | Mean Teacher entraîné sur l'entraînement seul : **modèle des résultats ci-dessous** |
+| `semi-supervised/models/mean_teacher_final/last.pth` | **modèle rendu** : même recette, réentraîné sur entraînement + validation |
+| `classification/models/classifier.pth` | ensemble de 10 petits réseaux de diagnostic (mesures du cœur par `mean_teacher_final`) |
 
-Les `.py` sont copiés dans chaque dossier pour que chaque partie soit autonome.
+Les hyperparamètres ont été choisis sur la validation avec le Mean Teacher entraîné sur l'entraînement seul. Le modèle rendu a ensuite été réentraîné avec la même recette sur l'entraînement et la validation réunis : son score sur la validation n'est donc pas un résultat. On garde toujours le **dernier** modèle (`last.pth`) : aucune époque n'est choisie sur la validation.
 
-## Lancer
+## Résultats (validation, 74 images)
 
-Sur Kaggle (GPU, dataset acdc-heartbeat, Internet activés) : cloner la branche `enes`, puis lancer chaque notebook depuis son dossier (`%cd` puis `%run`), dans l'ordre ci-dessous.
+Dernier modèle de chaque méthode, avec post-traitement. Dice moyen des 10 dernières époques pour comparer les méthodes. ASD = distance moyenne entre les contours, Hausdorff = la pire.
 
-À la main :
-
-Les données sont dans `Data/`, à côté du dossier `HeartBeat-Net` (sur Kaggle, le chemin est choisi automatiquement). Chaque notebook se lance depuis son dossier.
-
-1. `baseline/mainSegmentationChallenge_Enes.ipynb` → `baseline/models/final_dice/`
-2. `semi-supervised/semiSupervised_Enes.ipynb` → `models/pseudo_labels/` (utilise le modèle de la baseline)
-3. `semi-supervised/meanTeacher_Enes.ipynb`
-   - `FINAL = False` : entraînement sur train, évaluation sur val → `models/mean_teacher/` (comparaison du rapport)
-   - `FINAL = True` : entraînement sur train + val → `models/mean_teacher_final/` (**modèle rendu**)
-4. `semi-supervised/predict_Enes.ipynb` : mettre `TEST_DIR` sur le dossier des images de test → masques PNG (0, 85, 170, 255) et `predictions_test.zip`
-5. `semi-supervised/figures_Enes.ipynb` : figures et tableau du rapport
-
-## Résultats (run final du 22/11/2026)
-
-### Tâche 1 : segmentation (validation, 74 images)
-
-Dernier modèle de chaque méthode, avec post-traitement. ASD = distance moyenne entre les contours, Hausdorff = la pire.
-
-| Méthode | Dice moyen, 10 dernières époques | CE | Dice VD / Myo / VG | Hausdorff VD / Myo / VG (px) | ASD VD / Myo / VG (px) | Paramètres |
+| Méthode | Dice moyen (10 dernières ép.) | CE | Dice VD / Myo / VG | Hausdorff (px) | ASD (px) | Paramètres |
 |---|---|---|---|---|---|---|
-| 1A supervisé | 0.818 | 0.039 | 0.807 / 0.754 / 0.897 | 15.1 / 10.4 / 5.6 | 4.71 / 2.50 / 1.73 | 3 844 388 |
+| Baseline (UNet du prof, CE seule, Nadir) | voir `mainSegmentationChallenge_Nadir.ipynb` | | | | | |
+| Baseline+ (UNet amélioré) | 0.818 | 0.039 | 0.807 / 0.754 / 0.897 | 15.1 / 10.4 / 5.6 | 4.71 / 2.50 / 1.73 | 3 844 388 |
 | Pseudo-labels | 0.778 | 0.061 | 0.767 / 0.696 / 0.853 | 17.7 / 15.4 / 7.5 | 5.50 / 3.81 / 2.69 | 3 844 388 |
 | **Mean Teacher** | **0.854** | **0.027** | **0.841 / 0.786 / 0.926** | **12.3 / 9.8 / 4.1** | **4.06 / 2.26 / 1.24** | 3 844 388 |
 
-Mean Teacher est le meilleur sur toutes les métriques, avec le même réseau. Les runs précédents donnaient 0.840 et 0.844 : le gain est reproductible.
-Modèle rendu : Mean Teacher ré-entraîné sur train + val (`semi-supervised/models/mean_teacher_final/last.pth`).
-
-### Tâche 2 : diagnostic (validation croisée 5 plis par patient, 66 patients)
+Diagnostic, validation croisée en 5 plis par patient (66 patients) :
 
 | Méthode | Patients bien classés |
 |---|---|
 | Encodeur du UNet gelé + tête | 18 / 66 = 27 % |
-| Encodeur du UNet fine-tuné + tête | 17 / 66 = 26 % |
-| **Mesures du coeur par le UNet + ensemble de 10 réseaux** | **56 / 66 = 84.8 %** |
+| Encodeur du UNet réentraîné + tête | 17 / 66 = 26 % |
+| **Mesures du cœur par le UNet + ensemble de 10 réseaux** | **56 / 66 = 84.8 %** |
 
-Modèle rendu : `classification/models/classifier.pth`.
+Toutes les figures et les tableaux sont dans `resultats/` (courbes, matrices de confusion, exemples de prédictions, mesures par maladie).
+
+## Organisation
+
+```
+baseline/           Tâche 1A
+  mainSegmentationChallenge_Nadir.ipynb   baseline : UNet du prof, CE seule, balayage du learning rate
+  evaluation_Nadir.py                     CE, Dice, Hausdorff, ASD, tableaux et figures de la baseline
+  mainSegmentationChallenge_Enes.ipynb    baseline+ : 32 à 512 filtres, padding, CE + Dice, augmentation, cosinus
+semi-supervised/    Tâche 1B
+  semiSupervised_Enes.ipynb   essai : pseudo-labels
+  meanTeacher_Enes.ipynb      méthode retenue : Mean Teacher (réglage FINAL : entraînement + validation)
+  figures_Enes.ipynb          figures et tableau des résultats
+  predict_Enes.ipynb          masques PNG avec le modèle rendu
+  evaluer_segmentation.py     évaluation ou prédiction en ligne de commande
+classification/     Tâche 2
+  classificationEncodeur_Enes.ipynb  essai : encodeur du UNet + tête (réglage FREEZE)
+  classification_Enes.ipynb          méthode retenue : mesures du cœur + ensemble de réseaux
+  classification_Enes.py             patients, paires ED/ES, mesures du cœur, modèles
+  groupes.csv                        diagnostic de chaque patient (tiré de MetaData)
+  evaluer_classification.py          évaluation ou prédiction en ligne de commande
+resultats/          figures et tableaux du run final
+```
+
+Dans chaque dossier, `UNet_Base_*.py` est le réseau, `medicalDataLoader_*.py` le chargement des données et `utils_*.py` les métriques et le post-traitement. Les fichiers `_Enes` sont copiés dans chaque dossier pour que chaque partie soit autonome.
+
+## Réentraîner
+
+Chaque notebook se lance depuis son dossier, dans cet ordre : `baseline/`, `semi-supervised/semiSupervised_Enes`, `semi-supervised/meanTeacher_Enes` (avec `FINAL = False` puis `True`), `semi-supervised/figures_Enes`, puis `classification/`. La classification a besoin de `mean_teacher_final/last.pth`. Le notebook de Nadir a besoin de `medpy` (`pip install medpy` sur Kaggle).

@@ -1,0 +1,4 @@
+Méthode;Dice moyen 10 dernières époques;CE;Dice VD;Dice Myo;Dice VG;Hausdorff VD (px);Hausdorff Myo (px);Hausdorff VG (px);ASD VD (px);ASD Myo (px);ASD VG (px);Paramètres
+1A supervisé;0,818;0,039;0,807;0,754;0,897;15,1;10,4;5,6;4,71;2,50;1,73;3844388
+Pseudo-labels;0,778;0,061;0,767;0,696;0,853;17,7;15,4;7,5;5,50;3,81;2,69;3844388
+Mean Teacher;0,854;0,027;0,841;0,786;0,926;12,3;9,8;4,1;4,06;2,26;1,24;3844388

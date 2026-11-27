@@ -1,0 +1,18 @@
+Méthode;Patients bien classés;Précision
+Encodeur UNet gelé + tête;18 / 66;27 %
+Encodeur UNet fine-tuné + tête;17 / 66;26 %
+Mesures du coeur + ensemble de 10 réseaux;56 / 66;84,8 %
+
+Classe;Rappel;Précision
+NOR;1,00;0,83
+MINF;0,67;0,83
+DCM;0,92;0,85
+HCM;0,81;0,87
+RV;0,88;0,88
+
+Mesures moyennes par maladie;VG ED;VG ES;VD ED;VD ES;Myo ED;Myo ES;FE VG;FE VD;VD/VG;Myo/VG
+NOR;5422;2006;5925;2686;4054;4573;0,63;0,56;1,09;0,74
+MINF;7694;5080;4760;2279;5220;5811;0,34;0,54;0,63;0,70
+DCM;11561;9339;7809;6235;6369;6932;0,19;0,22;0,69;0,55
+HCM;5255;1597;4684;1660;7156;7384;0,73;0,69;0,82;1,38
+RV;5145;2296;8760;5672;3545;3970;0,55;0,41;1,92;0,74
